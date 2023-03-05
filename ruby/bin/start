@@ -1,0 +1,138 @@
+#!/usr/bin/env ruby -Ilib
+# frozen_string_literal: true
+
+require 'action'
+require 'game'
+require 'room'
+
+g = Game.new
+g.display(<<~MESSAGE)
+  You wake up to the muffled bang of a closing door. The sound came somewhere
+  above you. You cannot see, you are blindfolded. Something cutting into your
+  wrists. Your hands are sore and tied behind you. To top it there is a dull
+  pain coming from the back of your head.
+  After fiddling with your shoulders, you manage to push the blindfolds up a bit.
+  It's blury first, you blink a couple, squeeze your eyes and you start to see...
+MESSAGE
+
+# =========================================================
+# Create rooms and doors
+# =========================================================
+basement = Room.new('Basement')
+pantry = Room.new('Pantry')
+kitchen = Room.new('Kitchen')
+livingroom = Room.new('Livingroom')
+hall = Room.new('Hall')
+
+ladder_to_basement = Action('climb down to the basement') { g.goto(basement) }
+door_to_pantry = Action('go to the pantry') { g.goto(pantry) }
+ladder_to_pantry = Action('climb up on the ladder.') { g.goto(pantry) }
+door_to_kitchen = Action('go to the kitchen') { g.goto(kitchen) }
+door_to_livingroom = Action('go to the livingroom') { g.goto(livingroom) }
+door_to_hall = Action('go to the hall') { g.goto(hall) }
+
+# ---------------------------------------------------------
+# BASEMENT
+# ---------------------------------------------------------
+basement.description = <<~DESC
+  It's dim here. There are a couple racks next to the wall. There are some
+  containers on them but mostly empty. One of them is broken, and a sharp, metal
+  piece hangs out, about three steps from you.
+  On the ceiling to your left there's a pull-down ladder.
+DESC
+unreachable_ladder = Action('climb up on the ladder.') do
+  g.display 'Your hands are tied. You cannot reach the pull-down handle.'
+end
+free_hands_challange = Action('cut the quick-ties using the broken rack.') do |act|
+  answer = g.ask('How far is the metal piece?')
+
+  if answer =~ /(3|three)\s*(steps)?/i
+    g.display 'Great, your hands are free.'
+    basement.remove(act, unreachable_ladder)
+    basement.add(ladder_to_pantry)
+  elsif answer.to_i > 3
+    g.display 'Ouch! You walked into the sharp piece and cut yourself.'
+    g.injure!(1)
+  else
+    g.display 'You are not close enough to cut the ties.'
+  end
+end
+basement.add(unreachable_ladder, free_hands_challange)
+
+# ---------------------------------------------------------
+# PANTRY
+# ---------------------------------------------------------
+pantry.description = <<~DESC
+  There is a trap-door leading down to the basement. Nothing much here, but a
+  couple empty beer bootles.
+DESC
+beer_bottles = Action('break the bottles.') do |act|
+  pantry.remove(act)
+  pantry.description = <<~DESC
+    There is a trap-door leading down to the basement. The floor covered with
+    glass shards and your blood.
+  DESC
+  g.display <<~DESC
+    You kick these bottles but because you are still dizzy, you fall and cut
+    yourself badly.
+  DESC
+  g.injure!(1)
+end
+pantry.add(ladder_to_basement, door_to_kitchen, beer_bottles)
+
+# ---------------------------------------------------------
+# KITCHEN
+# ---------------------------------------------------------
+kitchen.description = <<~DESC
+  The sink is full of dirty coffee mugs. Apart from that it looks clean.
+  Actually, it looks empty. Whoever lives here, lives on coffee.
+  There is a door to the pantry, an open doorway to the livingroom, and door to
+  the back ally.
+DESC
+closed_backdoor = Action('leave through the backdoor.') do
+  g.display 'The door is locked and you do not have the key.'
+end
+open_backdoor = Action('leave through the backdoor.') do
+  g.display 'The key fits into the door. You are free! Run!'
+  g.win
+end
+kitchen.add(closed_backdoor, door_to_livingroom, door_to_pantry)
+
+# ---------------------------------------------------------
+# HALL
+# ---------------------------------------------------------
+hall.description = <<~DESC
+  There is a broken mirror. Below it, there's a key holder with a single key on
+  it.
+DESC
+pick_up_backdoor_key = Action('pick up the key') do |act|
+  hall.remove(act)
+  g.display 'You picked up the key. Hmmm... where can you use it?'
+  hall.description = "There is a broken mirror. Below it, there's an empty key holder."
+  kitchen.remove(closed_backdoor)
+  kitchen.add(open_backdoor)
+end
+hall.add(door_to_livingroom, pick_up_backdoor_key)
+
+# ---------------------------------------------------------
+# LIVINGROOM
+# ---------------------------------------------------------
+livingroom.description = <<~DESC
+  There is a small couch and an old TV in front of it. Curtains are closed
+  on the left of the couch.
+DESC
+open_curtains = Action('open the curtains.') do |act|
+  livingroom.remove(act)
+  g.display 'You opened the curtains. Sadly, the window got walled in a long time ago.'
+  livingroom.description = <<~DESC
+    There is a small couch and an old TV in front of it. There is a walled-in
+    window on the left of the couch.
+  DESC
+end
+livingroom.add(door_to_hall, door_to_kitchen, open_curtains)
+
+# =========================================================
+# Start the game
+# =========================================================
+g.goto(basement)
+g.loop

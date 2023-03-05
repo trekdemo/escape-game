@@ -1,0 +1,10 @@
+#!/bin/sh
+
+echo "Installing dependencies..."
+bundle check || bundle install
+
+echo "Running tests..."
+bundle exec rspec
+
+# Hint about how to run the game
+echo "Run the game by executing 'bin/start'."
